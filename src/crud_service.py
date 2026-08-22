@@ -37,7 +37,7 @@ class CrudAnalyzerService:
         total_files = len(sql_files)
 
         # ジョブごとのCRUDマップ構造:
-        # { "Job1": { "C": set(), "R": set(), "U": set(), "D": set() }, ... }
+        # { "Job1": { "EMPLOYEES": {"C", "U"}, "DEPARTMENTS": {"R"} }, ... }
         job_crud_map = defaultdict(lambda: defaultdict(set))
 
         for idx, file_path in enumerate(sql_files, 1):
@@ -47,15 +47,14 @@ class CrudAnalyzerService:
             query = self._read_sql_file(file_path)
             file_crud_map = self.parser.extract(query)
 
-            # { "EMPLOYEES": {"C", "U"}, ... } の結果を job_crud_map に登録
+            # 結果を job_crud_map[job_id][table_name] に統合
             for table_name, ops in file_crud_map.items():
-                for op in ops:
-                    job_crud_map[job_id][op].add(table_name)
+                job_crud_map[job_id][table_name].update(ops)
 
             if progress_callback:
                 progress_callback(idx, total_files)
 
-        # ジョブID × CRUD のマトリクスCSVを出力
+        # テーブルごとに別行（1テーブル1行）で出力
         self._export_to_job_matrix_csv(job_crud_map, save_path)
 
     @staticmethod
@@ -76,27 +75,24 @@ class CrudAnalyzerService:
         """
         縦軸: JOB_ID
         横軸: C, R, U, D
-        セル: テーブル名一覧 (カンマ区切り・ソート済)
+        セル: テーブル名（同一ジョブで複数テーブルが存在する場合は別々の行として出力）
         """
         records = []
         for job_id in sorted(job_crud_map.keys()):
-            ops = job_crud_map[job_id]
+            tables_map = job_crud_map[job_id]
 
-            # 各操作ごとのテーブル一覧をカンマ区切りの文字列に整形
-            c_tables = ", ".join(sorted(ops.get("C", [])))
-            r_tables = ", ".join(sorted(ops.get("R", [])))
-            u_tables = ", ".join(sorted(ops.get("U", [])))
-            d_tables = ", ".join(sorted(ops.get("D", [])))
-
-            records.append(
-                {
-                    "JOB_ID": job_id,
-                    "C": c_tables,
-                    "R": r_tables,
-                    "U": u_tables,
-                    "D": d_tables,
-                }
-            )
+            # ジョブ内の各テーブルをソートして1行ずつレコードを生成
+            for table_name in sorted(tables_map.keys()):
+                ops = tables_map[table_name]
+                records.append(
+                    {
+                        "JOB_ID": job_id,
+                        "C": table_name if "C" in ops else "",
+                        "R": table_name if "R" in ops else "",
+                        "U": table_name if "U" in ops else "",
+                        "D": table_name if "D" in ops else "",
+                    }
+                )
 
         df = pd.DataFrame(records)
         if df.empty:

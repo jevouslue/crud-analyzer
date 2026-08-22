@@ -116,7 +116,7 @@ class CrudMatrixApp(ctk.CTk):
             defaultextension=".csv",
             filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")],
             title="解析結果CSVの保存先を指定",
-            initialfile="crud_matrix_result.csv",
+            initialfile="CRUD.csv",
         )
 
         if not save_path:

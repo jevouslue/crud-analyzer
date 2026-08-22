@@ -2,8 +2,8 @@ import threading
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
 
-# 分離したサービスロジッククラスをインポート
-from crud_service import CrudAnalyzerService
+from crud_facade import CrudAnalysisFacade
+from system_launcher import SystemLauncher
 
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
@@ -18,8 +18,9 @@ class CrudMatrixApp(ctk.CTk):
         self.geometry("600x280")
         self.resizable(False, False)
 
-        # サービスレイヤーの保持
-        self.service = CrudAnalyzerService(dialect="oracle")
+        # 責務を分離したクラスの保持
+        self.facade = CrudAnalysisFacade(dialect="oracle")
+        self.launcher = SystemLauncher()
 
         self.target_dir = ""
         self.sql_files = []
@@ -57,9 +58,8 @@ class CrudMatrixApp(ctk.CTk):
             font=ctk.CTkFont(size=12),
             text_color="gray",
         )
-        self.lbl_file_count.pack(anchor="w", padx=15)
+        self.lbl_file_count.pack(anchor="w", padx=15, pady=(0, 15))
 
-        # 解析実行ボタン
         self.btn_analyze = ctk.CTkButton(
             main_frame,
             text="解析",
@@ -73,7 +73,7 @@ class CrudMatrixApp(ctk.CTk):
         )
         self.btn_analyze.pack(fill="x", padx=15, pady=(10, 20))
 
-        # 進捗プログレスバー
+        # プログレスバー
         self.lbl_progress = ctk.CTkLabel(
             main_frame, text="待機中", font=ctk.CTkFont(size=12)
         )
@@ -82,6 +82,13 @@ class CrudMatrixApp(ctk.CTk):
         self.progressbar = ctk.CTkProgressBar(main_frame)
         self.progressbar.pack(fill="x", padx=15, pady=(0, 15))
         self.progressbar.set(0)
+
+    def _set_btn_analyze_state(self, enabled: bool):
+        """解析ボタンの有効・無効と見た目を切り替え"""
+        if enabled:
+            self.btn_analyze.configure(state="normal", fg_color="#1f538d")
+        else:
+            self.btn_analyze.configure(state="disabled", fg_color="#555555")
 
     def _browse_folder(self):
         """フォルダ選択イベント（ロジック側でファイル検索を実行）"""
@@ -93,8 +100,8 @@ class CrudMatrixApp(ctk.CTk):
         self.entry_dir.delete(0, "end")
         self.entry_dir.insert(0, self.target_dir)
 
-        # ロジック側にファイル検索を委託
-        self.sql_files = self.service.search_sql_files(self.target_dir)
+        # Facade経由でファイル一覧を取得
+        self.sql_files = self.facade.get_sql_files(self.target_dir)
 
         count = len(self.sql_files)
         self.lbl_file_count.configure(
@@ -109,19 +116,6 @@ class CrudMatrixApp(ctk.CTk):
             self._set_btn_analyze_state(False)
             self.lbl_progress.configure(
                 text="対象フォルダ内に .sql ファイルが見つかりません"
-            )
-
-    def _set_btn_analyze_state(self, enabled: bool):
-        """解析ボタンの有効・無効と見た目（グレー表示）を切り替える"""
-        if enabled:
-            self.btn_analyze.configure(
-                state="normal",
-                fg_color="#3B8ED0"  # 通常の青色
-            )
-        else:
-            self.btn_analyze.configure(
-                state="disabled",
-                fg_color="light slate gray",
             )
 
     def _start_analysis_process(self):
@@ -155,13 +149,11 @@ class CrudMatrixApp(ctk.CTk):
             progress_val = current / total
             status_text = f"{percent}% ({current}/{total}ファイル解析中)"
             # スレッド安全にUI更新
-            self.after(
-                0, self._update_ui_progress, progress_val, status_text
-            )
+            self.after(0, self._update_ui_progress, progress_val, status_text)
 
         try:
-            # サービス領域の主処理を実行
-            self.service.analyze_and_export(
+            # Facade経由で解析を実行
+            self.facade.execute_analysis(
                 self.sql_files, save_path, progress_callback=on_progress
             )
             self.after(0, self._on_analysis_complete, save_path)
@@ -184,7 +176,8 @@ class CrudMatrixApp(ctk.CTk):
         )
         if ans:
             try:
-                self.service.open_file_with_default_app(save_path)
+                # SystemLauncher経由で既定アプリを起動
+                self.launcher.open_file(save_path)
             except Exception as e:
                 messagebox.showwarning(
                     "警告", f"ファイルを開けませんでした。\n{e}", parent=self

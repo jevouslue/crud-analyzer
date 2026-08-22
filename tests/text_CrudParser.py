@@ -1,6 +1,6 @@
 import unittest
 
-from src.CrudParser import CrudParser
+from src.crud_parser import CrudParser
 
 class TestExtractTableOperate(unittest.TestCase):
     def setUp(self):

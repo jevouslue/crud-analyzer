@@ -15,7 +15,7 @@ class CrudMatrixApp(ctk.CTk):
         super().__init__()
 
         self.title("SQL CRUD Matrix Generator")
-        self.geometry("600x420")
+        self.geometry("600x280")
         self.resizable(False, False)
 
         # サービスレイヤーの保持
@@ -57,7 +57,7 @@ class CrudMatrixApp(ctk.CTk):
             font=ctk.CTkFont(size=12),
             text_color="gray",
         )
-        self.lbl_file_count.pack(anchor="w", padx=15, pady=(0, 15))
+        self.lbl_file_count.pack(anchor="w", padx=15)
 
         # 解析実行ボタン
         self.btn_analyze = ctk.CTkButton(
@@ -66,6 +66,9 @@ class CrudMatrixApp(ctk.CTk):
             font=ctk.CTkFont(size=16, weight="bold"),
             height=40,
             state="disabled",
+            text_color="white",
+            fg_color="light slate gray",
+            text_color_disabled="#ededed",
             command=self._start_analysis_process,
         )
         self.btn_analyze.pack(fill="x", padx=15, pady=(10, 20))
@@ -100,12 +103,25 @@ class CrudMatrixApp(ctk.CTk):
         )
 
         if count > 0:
-            self.btn_analyze.configure(state="normal")
+            self._set_btn_analyze_state(True)
             self.lbl_progress.configure(text="準備完了")
         else:
-            self.btn_analyze.configure(state="disabled")
+            self._set_btn_analyze_state(False)
             self.lbl_progress.configure(
                 text="対象フォルダ内に .sql ファイルが見つかりません"
+            )
+
+    def _set_btn_analyze_state(self, enabled: bool):
+        """解析ボタンの有効・無効と見た目（グレー表示）を切り替える"""
+        if enabled:
+            self.btn_analyze.configure(
+                state="normal",
+                fg_color="#3B8ED0"  # 通常の青色
+            )
+        else:
+            self.btn_analyze.configure(
+                state="disabled",
+                fg_color="light slate gray",
             )
 
     def _start_analysis_process(self):
@@ -123,7 +139,7 @@ class CrudMatrixApp(ctk.CTk):
             return
 
         self.is_processing = True
-        self.btn_analyze.configure(state="disabled")
+        self._set_btn_analyze_state(False)
         self.progressbar.set(0)
 
         # バックグラウンドスレッドで実行
@@ -158,7 +174,7 @@ class CrudMatrixApp(ctk.CTk):
 
     def _on_analysis_complete(self, save_path: str):
         self.is_processing = False
-        self.btn_analyze.configure(state="normal")
+        self._set_btn_analyze_state(True)
         self.lbl_progress.configure(text="解析が完了しました。")
 
         ans = messagebox.askyesno(
@@ -176,7 +192,7 @@ class CrudMatrixApp(ctk.CTk):
 
     def _on_analysis_error(self, err_msg: str):
         self.is_processing = False
-        self.btn_analyze.configure(state="normal")
+        self._set_btn_analyze_state(True)
         self.lbl_progress.configure(text="エラーが発生し中断しました。")
 
         messagebox.showerror(
